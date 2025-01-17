@@ -16,7 +16,7 @@ fluc_blank_avg <- mean(as.numeric(results[results$Assay == "Fluc", c("Blank 1", 
 
 # Subtract the average Fluc blank from all Fluc values
 
-  # Only considering the fluc values
+  # Only consider the fluc values
 fluc_values <- setdiff(names(results), c("Assay", "Blank 1", "Blank 2"))
 
 # Make a new dataframe for the processed data
@@ -55,7 +55,7 @@ fluc_values <- corrected_data[corrected_data$Assay == "Fluc", ratio_values]
 rluc_values <- corrected_data[corrected_data$Assay == "Rluc", ratio_values]
 fluc_rluc_ratios <- fluc_values / rluc_values
 
-# Average the control (no recruiting element & knockdown) 
+# Average the control (no recruiting element or knockdown) 
 control_1_avg <- mean(as.numeric(fluc_rluc_ratios[c("Control 1A", "Control 1B")]), na.rm = TRUE)
 
 # Fluc/Rluc ratios over the control
