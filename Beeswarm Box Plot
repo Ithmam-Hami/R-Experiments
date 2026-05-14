@@ -1,0 +1,203 @@
+############################################################
+# Beeswarm + Boxplot from Multi-Sheet Excel Workbook
+#
+# This script:
+#   1. Reads all sheets from an Excel workbook
+#   2. Keeps only sheets with required columns
+#   3. Combines the data
+#   4. Plots group-level distributions using:
+#        - boxplots
+#        - quasirandom/beeswarm points
+#        - median markers
+#        - sample size labels
+#
+# Required input columns:
+#   Group
+#   Sample
+#   Measurement
+############################################################
+
+
+############################################################
+# 1. Install required packages
+# Run once if packages are not already installed.
+############################################################
+
+install.packages(c(
+  "readxl",
+  "dplyr",
+  "ggplot2",
+  "ggbeeswarm",
+  "scales"
+))
+
+
+############################################################
+# 2. Load libraries
+############################################################
+
+library(readxl)      # read Excel workbooks
+library(dplyr)       # data filtering and summarizing
+library(ggplot2)     # plotting
+library(ggbeeswarm)  # beeswarm / quasirandom point layout
+library(scales)      # nicer axis labels
+
+
+############################################################
+# 3. Define input file
+############################################################
+
+file <- "InputWorkbook.xlsx"
+
+
+############################################################
+# 4. Read all sheets automatically
+#
+# This avoids hard-coding sheet names.
+# Any sheet missing the required columns is skipped.
+############################################################
+
+sheet_names <- excel_sheets(file)
+
+all_df <- bind_rows(lapply(sheet_names, function(sheet) {
+  
+  df <- read_excel(file, sheet = sheet)
+  
+  required_cols <- c("Group", "Sample", "Measurement")
+  
+  if (!all(required_cols %in% names(df))) {
+    return(NULL)
+  }
+  
+  return(df)
+}))
+
+
+############################################################
+# 5. Clean data
+#
+# Measurement is converted to numeric.
+# Missing, infinite, zero, or negative values are removed
+# because the plot uses a log10 y-axis.
+############################################################
+
+all_df <- all_df %>%
+  mutate(
+    Group = trimws(Group),
+    Measurement = as.numeric(Measurement)
+  ) %>%
+  filter(
+    !is.na(Group),
+    !is.na(Measurement),
+    is.finite(Measurement),
+    Measurement > 0
+  )
+
+
+############################################################
+# 6. Optional: set group order
+#
+# Edit this vector if you want groups displayed in a specific order.
+# Otherwise, comment out this block.
+############################################################
+
+group_order <- unique(all_df$Group)
+
+all_df$Group <- factor(
+  all_df$Group,
+  levels = group_order
+)
+
+
+############################################################
+# 7. Calculate sample size labels
+#
+# n is calculated after filtering, so it represents the number
+# of usable values plotted for each group.
+############################################################
+
+n_df <- all_df %>%
+  group_by(Group) %>%
+  summarise(
+    n = n(),
+    y_pos = max(Measurement, na.rm = TRUE) * 1.8,
+    .groups = "drop"
+  )
+
+
+############################################################
+# 8. Make plot
+#
+# geom_boxplot:
+#   Shows the distribution summary for each group.
+#
+# geom_quasirandom:
+#   Shows individual data points while reducing overlap.
+#
+# stat_summary:
+#   Adds a median marker.
+#
+# geom_text:
+#   Adds n labels above each group.
+############################################################
+
+p <- ggplot(
+  all_df,
+  aes(x = Group, y = Measurement, color = Group)
+) +
+  geom_boxplot(
+    outlier.shape = NA,
+    width = 0.5,
+    color = "black"
+  ) +
+  geom_quasirandom(
+    size = 1.2,
+    alpha = 0.5,
+    width = 0.22
+  ) +
+  stat_summary(
+    fun = median,
+    geom = "point",
+    shape = 18,
+    size = 3,
+    color = "red"
+  ) +
+  geom_text(
+    data = n_df,
+    aes(
+      x = Group,
+      y = y_pos,
+      label = paste0("n=", n)
+    ),
+    inherit.aes = FALSE,
+    size = 4,
+    color = "black"
+  ) +
+  scale_y_log10(
+    labels = label_number()
+  ) +
+  labs(
+    x = "Group",
+    y = "Measurement (log10 scale)",
+    title = "Group-Level Variation in Measurement"
+  ) +
+  theme_classic() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    legend.position = "none"
+  )
+
+
+############################################################
+# 9. Display and save plot
+############################################################
+
+print(p)
+
+ggsave(
+  filename = "beeswarm_boxplot_log.png",
+  plot = p,
+  width = 12,
+  height = 6,
+  dpi = 300
+)
